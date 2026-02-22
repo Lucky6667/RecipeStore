@@ -1,0 +1,15 @@
+IG_UI_EN = {
+    Sandbox_RecipeStore = "Mod Recipe Store",
+    Sandbox_RecipeStore_ZombiesPerPoint = "Zombies per Point",
+    Sandbox_RecipeStore_ZombiesPerPoint_tooltip = "Zombiekills per point. 0 to disable",
+    Sandbox_RecipeStore_DaysPerPoint = "Days per Point",
+    Sandbox_RecipeStore_DaysPerPoint_tooltip = "How many in-game days must pass for 1 point. 0 to disable",
+    Sandbox_RecipeStore_MinutesPerPoint = "Real Minutes per Point",
+    Sandbox_RecipeStore_MinutesPerPoint_tooltip = "How many real-world minutes must pass for 1 point. 0 to disable",
+    Sandbox_RecipeStore_FilterMode = "Whitelist Mode (OFF = Blacklist)",
+    Sandbox_RecipeStore_FilterMode_tooltip = "If ON: Only items matching the filters below are shown.\nIf OFF: Items matching the filters are HIDDEN.",
+    Sandbox_RecipeStore_CategoryFilter = "Category Filter",
+    Sandbox_RecipeStore_CategoryFilter_tooltip = "Comma separated list of categories to filter.\nExample: Food, Weapon, Material \nUse "Category Name" for exact matching",
+    Sandbox_RecipeStore_ItemFilter = "Item Name Filter",
+    Sandbox_RecipeStore_ItemFilter_tooltip = "Comma separated list of item names (or parts of names) to filter.\nExample: Spiffo, generator, sledge \nUse "Item Name" for exact matching",
+}

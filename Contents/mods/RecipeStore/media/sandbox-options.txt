@@ -1,0 +1,49 @@
+VERSION = 1,
+option RecipeStore.ZombiesPerPoint
+{
+    type = integer,
+    min = 0,
+    max = 10000,
+    default = 50,
+    page = RecipeStore,
+    translation = RecipeStore_ZombiesPerPoint,
+}
+option RecipeStore.DaysPerPoint
+{
+    type = integer,
+    min = 0,
+    max = 365,
+    default = 7,
+    page = RecipeStore,
+    translation = RecipeStore_DaysPerPoint,
+}
+option RecipeStore.MinutesPerPoint
+{
+    type = integer,
+    min = 0,
+    max = 10000,
+    default = 30,
+    page = RecipeStore,
+    translation = RecipeStore_MinutesPerPoint,
+}
+option RecipeStore.FilterMode
+{
+    type = boolean,
+    default = false,
+    page = RecipeStore,
+    translation = RecipeStore_FilterMode,
+}
+option RecipeStore.CategoryFilter
+{
+    type = string,
+    default = ,
+    page = RecipeStore,
+    translation = RecipeStore_CategoryFilter,
+}
+option RecipeStore.ItemFilter
+{
+    type = string,
+    default = ,
+    page = RecipeStore,
+    translation = RecipeStore_ItemFilter,
+}
