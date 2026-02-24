@@ -71,7 +71,6 @@ end
 -- 1. Build Item List
 function RecipeStore.buildItemList()
     RecipeStore.BuyableItems = {}
-
     local isWhitelist = RecipeStore.getOption("FilterMode")
     local allowAll = RecipeStore.getOption("AllowAllItems")
     local catFilters = parseFilterString(RecipeStore.getOption("CategoryFilter"))
@@ -81,7 +80,6 @@ function RecipeStore.buildItemList()
 
     local allRecipes = ScriptManager.instance:getAllRecipes()
     local allItems = ScriptManager.instance:getAllItems()
-
     local candidateItems = {}
 
     if allowAll then
@@ -93,15 +91,22 @@ function RecipeStore.buildItemList()
             end
         end
     else
-        -- MODE: INGREDIENTS ONLY
-        local craftableItems = {}
+        -- MODE: INGREDIENTS ONLY (With Circular Logic Check)
+
+        -- Step A: Map items to the recipes that create them
+        -- Key: ItemFullType, Value: Table of Recipe Objects
+        local itemRecipeMap = {}
         local ingredientMap = {}
 
         for i=0, allRecipes:size()-1 do
             local recipe = allRecipes:get(i)
             local result = recipe:getResult():getFullType()
-            craftableItems[result] = true
 
+            -- Store the recipe that makes this result
+            if not itemRecipeMap[result] then itemRecipeMap[result] = {} end
+            table.insert(itemRecipeMap[result], recipe)
+
+            -- Store the ingredients used in this recipe
             local sources = recipe:getSource()
             for j=0, sources:size()-1 do
                 local source = sources:get(j)
@@ -112,8 +117,55 @@ function RecipeStore.buildItemList()
             end
         end
 
+        -- Step B: Select items
         for itemType, _ in pairs(ingredientMap) do
-            if not craftableItems[itemType] then
+            local shouldInclude = false
+            local recipes = itemRecipeMap[itemType]
+
+            -- Case 1: Item has NO recipes (True base ingredient)
+            if not recipes then
+                shouldInclude = true
+
+            -- Case 2: Item HAS recipes, but might be a loop (e.g. Nails -> Box -> Nails)
+            elseif #recipes == 1 then
+                local theRecipe = recipes[1]
+                local sources = theRecipe:getSource()
+
+                -- Check the ingredients of this single recipe
+                -- If the ingredient needed to make 'itemType' REQUIRES 'itemType' to be made, it's a loop.
+                local isLoop = false
+
+                for j=0, sources:size()-1 do
+                    local sourceItems = sources:get(j):getItems()
+                    for k=0, sourceItems:size()-1 do
+                        local ingredientName = sourceItems:get(k)
+
+                        -- Look at the recipes that create this ingredient
+                        local ingredientRecipes = itemRecipeMap[ingredientName]
+                        if ingredientRecipes then
+                            for _, ingRecipe in ipairs(ingredientRecipes) do
+                                local ingSources = ingRecipe:getSource()
+                                for l=0, ingSources:size()-1 do
+                                    local ingSourceList = ingSources:get(l):getItems()
+                                    -- Does the ingredient's recipe require the original item?
+                                    if ingSourceList:contains(itemType) then
+                                        isLoop = true
+                                        break
+                                    end
+                                end
+                                if isLoop then break end
+                            end
+                        end
+                        if isLoop then break end
+                    end
+                    if isLoop then break end
+                end
+
+                if isLoop then shouldInclude = true end
+            end
+
+            -- Step C: Add to candidate list if passed checks
+            if shouldInclude then
                 local scriptItem = ScriptManager.instance:getItem(itemType)
                 if scriptItem and not scriptItem:getObsolete() then
                     table.insert(candidateItems, scriptItem)
@@ -124,10 +176,8 @@ function RecipeStore.buildItemList()
 
     -- FILTERING
     for _, scriptItem in ipairs(candidateItems) do
-
         -- SAFETY CHECK: Stop processing if Hard Blacklisted
         if not isHardBlacklisted(scriptItem) then
-
             local itemName = scriptItem:getDisplayName()
             local internalCat = scriptItem:getDisplayCategory()
             if not internalCat or internalCat == "" then internalCat = "Misc" end
@@ -138,11 +188,12 @@ function RecipeStore.buildItemList()
             -- Check against Display Name
             local displayCat = getText("IGUI_ItemCat_" .. internalCat)
             if displayCat == "IGUI_ItemCat_" .. internalCat then displayCat = internalCat end
+
             if not matchesCat then matchesCat = matchesAny(displayCat, catFilters) end
 
             local matchesName = matchesAny(itemName, itemFilters)
-            local isMatch = matchesCat or matchesName
 
+            local isMatch = matchesCat or matchesName
             local shouldAdd = false
 
             if isWhitelist then
