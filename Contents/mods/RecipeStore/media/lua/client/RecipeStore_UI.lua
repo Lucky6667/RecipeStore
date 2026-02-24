@@ -3,10 +3,10 @@ RecipeStore.BuyableItems = {}
 
 -- Helper to get options safely
 function RecipeStore.getOption(name)
-    if SandboxVars and SandboxVars.RecipeStore and SandboxVars.RecipeStore[name] then
+    if SandboxVars and SandboxVars.RecipeStore and SandboxVars.RecipeStore[name] ~= nil then
         return SandboxVars.RecipeStore[name]
     end
-    if name == "FilterMode" then return false end
+    if name == "FilterMode" or name == "AllowAllItems" or name == "RandomMode" then return false end
     if name == "CategoryFilter" or name == "ItemFilter" then return "" end
     return 0
 end
@@ -15,21 +15,15 @@ end
 local function parseFilterString(str)
     local list = {}
     if not str or str == "" then return list end
-
     for word in string.gmatch(str, '([^,]+)') do
         local cleanWord = string.trim(word)
         local isExact = false
-
-        -- Check for quotes at start and end
         if string.len(cleanWord) > 1 and string.sub(cleanWord, 1, 1) == '"' and string.sub(cleanWord, -1) == '"' then
             isExact = true
             cleanWord = string.sub(cleanWord, 2, -2)
         end
-
         cleanWord = cleanWord:lower()
-        if cleanWord ~= "" then
-            table.insert(list, {text = cleanWord, exact = isExact})
-        end
+        if cleanWord ~= "" then table.insert(list, {text = cleanWord, exact = isExact}) end
     end
     return list
 end
@@ -39,7 +33,6 @@ local function matchesAny(target, filterList)
     if #filterList == 0 then return false end
     if not target then return false end
     local cleanTarget = target:lower()
-
     for _, filter in ipairs(filterList) do
         if filter.exact then
             if cleanTarget == filter.text then return true end
@@ -50,70 +43,117 @@ local function matchesAny(target, filterList)
     return false
 end
 
+-- NEW HELPER: Hardcoded Blacklist Check
+local function isHardBlacklisted(item)
+    local internalCat = item:getDisplayCategory()
+    if not internalCat then internalCat = "Misc" end
+
+    -- 1. Check Categories
+    local badCats = {
+        ["Wound"] = true,
+        ["ZedDmg"] = true,
+        ["Hidden"] = true,
+        ["MaleBody"] = true,
+        ["Nothing"] = true
+    }
+    if badCats[internalCat] then return true end
+
+    -- 2. Check Item Name for "nothing"
+    local name = item:getName():lower() -- Internal name (e.g. Base.Nothing)
+    if string.find(name, "nothing") then return true end
+
+    local displayName = item:getDisplayName():lower() -- Display name
+    if string.find(displayName, "nothing") then return true end
+
+    return false
+end
+
 -- 1. Build Item List
 function RecipeStore.buildItemList()
     RecipeStore.BuyableItems = {}
 
     local isWhitelist = RecipeStore.getOption("FilterMode")
+    local allowAll = RecipeStore.getOption("AllowAllItems")
     local catFilters = parseFilterString(RecipeStore.getOption("CategoryFilter"))
     local itemFilters = parseFilterString(RecipeStore.getOption("ItemFilter"))
 
     if isWhitelist and #catFilters == 0 and #itemFilters == 0 then return end
 
     local allRecipes = ScriptManager.instance:getAllRecipes()
-    local craftableItems = {}
-    local ingredientItems = {}
+    local allItems = ScriptManager.instance:getAllItems()
 
-    -- Find Craftables & Ingredients
-    for i=0, allRecipes:size()-1 do
-        local recipe = allRecipes:get(i)
-        local result = recipe:getResult():getFullType()
-        craftableItems[result] = true
+    local candidateItems = {}
 
-        local sources = recipe:getSource()
-        for j=0, sources:size()-1 do
-            local source = sources:get(j)
-            local items = source:getItems()
-            for k=0, items:size()-1 do
-                ingredientItems[items:get(k)] = true
+    if allowAll then
+        -- MODE: ALL ITEMS
+        for i=0, allItems:size()-1 do
+            local item = allItems:get(i)
+            if item and not item:getObsolete() then
+                table.insert(candidateItems, item)
+            end
+        end
+    else
+        -- MODE: INGREDIENTS ONLY
+        local craftableItems = {}
+        local ingredientMap = {}
+
+        for i=0, allRecipes:size()-1 do
+            local recipe = allRecipes:get(i)
+            local result = recipe:getResult():getFullType()
+            craftableItems[result] = true
+
+            local sources = recipe:getSource()
+            for j=0, sources:size()-1 do
+                local source = sources:get(j)
+                local items = source:getItems()
+                for k=0, items:size()-1 do
+                    ingredientMap[items:get(k)] = true
+                end
+            end
+        end
+
+        for itemType, _ in pairs(ingredientMap) do
+            if not craftableItems[itemType] then
+                local scriptItem = ScriptManager.instance:getItem(itemType)
+                if scriptItem and not scriptItem:getObsolete() then
+                    table.insert(candidateItems, scriptItem)
+                end
             end
         end
     end
 
-    -- Filter
-    for itemType, _ in pairs(ingredientItems) do
-        if not craftableItems[itemType] then
-            local scriptItem = ScriptManager.instance:getItem(itemType)
-            if scriptItem and not scriptItem:getObsolete() then
+    -- FILTERING
+    for _, scriptItem in ipairs(candidateItems) do
 
-                local itemName = scriptItem:getDisplayName()
-                -- SAFETY: Default to "Misc" if nil
-                local internalCat = scriptItem:getDisplayCategory()
-                if not internalCat or internalCat == "" then internalCat = "Misc" end
+        -- SAFETY CHECK: Stop processing if Hard Blacklisted
+        if not isHardBlacklisted(scriptItem) then
 
-                -- Check against Internal ID
-                local matchesCat = matchesAny(internalCat, catFilters)
+            local itemName = scriptItem:getDisplayName()
+            local internalCat = scriptItem:getDisplayCategory()
+            if not internalCat or internalCat == "" then internalCat = "Misc" end
 
-                -- Check against Display Name
-                local displayCat = getText("IGUI_ItemCat_" .. internalCat)
-                if displayCat == "IGUI_ItemCat_" .. internalCat then displayCat = internalCat end
-                if not matchesCat then matchesCat = matchesAny(displayCat, catFilters) end
+            -- Check against Internal ID
+            local matchesCat = matchesAny(internalCat, catFilters)
 
-                local matchesName = matchesAny(itemName, itemFilters)
-                local isMatch = matchesCat or matchesName
+            -- Check against Display Name
+            local displayCat = getText("IGUI_ItemCat_" .. internalCat)
+            if displayCat == "IGUI_ItemCat_" .. internalCat then displayCat = internalCat end
+            if not matchesCat then matchesCat = matchesAny(displayCat, catFilters) end
 
-                local shouldAdd = false
+            local matchesName = matchesAny(itemName, itemFilters)
+            local isMatch = matchesCat or matchesName
 
-                if isWhitelist then
-                    if isMatch then shouldAdd = true end
-                else
-                    shouldAdd = true
-                    if isMatch then shouldAdd = false end
-                end
+            local shouldAdd = false
 
-                if shouldAdd then
-                    table.insert(RecipeStore.BuyableItems, scriptItem)
-                end
+            if isWhitelist then
+                if isMatch then shouldAdd = true end
+            else
+                shouldAdd = true
+                if isMatch then shouldAdd = false end
+            end
+
+            if shouldAdd then
+                table.insert(RecipeStore.BuyableItems, scriptItem)
             end
         end
     end
@@ -129,6 +169,7 @@ local function onFillWorldObjectContextMenu(player, context, worldObjects, test)
     local playerObj = getSpecificPlayer(player)
     local modData = playerObj:getModData()
     local points = modData.RS_Points or 0
+    local isRandomMode = RecipeStore.getOption("RandomMode")
 
     -- Add Main Option
     local storeOption = context:addOption("Recipe Store", worldObjects, nil)
@@ -138,9 +179,32 @@ local function onFillWorldObjectContextMenu(player, context, worldObjects, test)
     local header = storeSubMenu:addOption("Points: " .. points, nil, nil)
     header.notAvailable = true
 
-    -- Group items by Display Name for the UI
+    if isRandomMode then
+        local randomOption = storeSubMenu:addOption("Purchase Random Item", playerObj, function(pl)
+            local pData = pl:getModData()
+            if pData.RS_Points and pData.RS_Points >= 1 then
+                pData.RS_Points = pData.RS_Points - 1
+
+                local rndIndex = ZombRand(#RecipeStore.BuyableItems) + 1
+                local item = RecipeStore.BuyableItems[rndIndex]
+                local fullType = item:getFullName()
+                local name = item:getDisplayName()
+
+                pl:getInventory():AddItem(fullType)
+                pl:setHaloNote("Gamble Won: " .. name, 0, 255, 0, 300)
+            else
+                pl:setHaloNote("Not enough points!", 255, 0, 0, 300)
+            end
+        end)
+
+        local tooltip = ISWorldObjectContextMenu.addToolTip()
+        tooltip:setName("Random Gamble")
+        tooltip.description = "Cost: 1 Point\nGet a random item from the configured list."
+        randomOption.toolTip = tooltip
+        return
+    end
+
     local categorizedItems = {}
-    -- Store the mapping from Display Name -> Internal ID for the header
     local categoryInternalIDs = {}
 
     for _, item in ipairs(RecipeStore.BuyableItems) do
@@ -152,7 +216,7 @@ local function onFillWorldObjectContextMenu(player, context, worldObjects, test)
 
         if not categorizedItems[displayCat] then
             categorizedItems[displayCat] = {}
-            categoryInternalIDs[displayCat] = internalCat -- Save the ID for later
+            categoryInternalIDs[displayCat] = internalCat
         end
         table.insert(categorizedItems[displayCat], item)
     end
@@ -169,7 +233,6 @@ local function onFillWorldObjectContextMenu(player, context, worldObjects, test)
         local catSubMenu = storeSubMenu:getNew(storeSubMenu)
         storeSubMenu:addSubMenu(catOption, catSubMenu)
 
-        -- NEW HEADER: Display the Internal ID
         local internalID = categoryInternalIDs[catName] or "Unknown"
         local idHeader = catSubMenu:addOption("ID: " .. internalID, nil, nil)
         idHeader.notAvailable = true

@@ -12,4 +12,8 @@ IG_UI_EN = {
     Sandbox_RecipeStore_CategoryFilter_tooltip = "Comma separated list of categories to filter.\nExample: Food, Weapon, Material \nUse "Category Name" for exact matching",
     Sandbox_RecipeStore_ItemFilter = "Item Name Filter",
     Sandbox_RecipeStore_ItemFilter_tooltip = "Comma separated list of item names (or parts of names) to filter.\nExample: Spiffo, generator, sledge \nUse "Item Name" for exact matching",
+    Sandbox_RecipeStore_AllowAllItems = "Allow All Items",
+    Sandbox_RecipeStore_AllowAllItems_tooltip = "enabled = All Items \n disabled = non craftable carafting items",
+    Sandbox_RecipeStore_RandomMode = "Random Mode",
+    Sandbox_RecipeStore_RandomMode_tooltip = "Give random Item from allowed list",
 }

@@ -47,3 +47,17 @@ option RecipeStore.ItemFilter
     page = RecipeStore,
     translation = RecipeStore_ItemFilter,
 }
+option RecipeStore.AllowAllItems
+{
+    type = boolean,
+    default = false,
+    page = RecipeStore,
+    translation = RecipeStore_AllowAllItems,
+}
+option RecipeStore.RandomMode
+{
+    type = boolean,
+    default = false,
+    page = RecipeStore,
+    translation = RecipeStore_RandomMode,
+}
